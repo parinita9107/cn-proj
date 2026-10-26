@@ -1,0 +1,10 @@
+
+{
+  "name": "congestion_test",
+  "controller_mode": "dynamic",
+  "rate_mbps": 20,
+  "packet_size": 1000,
+  "duration": 30,
+  "scenario": "congestion",
+  "test_id": 2
+}
