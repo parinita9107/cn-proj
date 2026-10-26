@@ -1,9 +1,0 @@
-{
-  "name": "normal_5mbps",
-  "controller_mode": "static",
-  "rate_mbps": 5,
-  "packet_size": 1000,
-  "duration": 20,
-  "scenario": "none",
-  "test_id": 1
-}
