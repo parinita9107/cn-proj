@@ -1,0 +1,9 @@
+REAL-DATA DIAGNOSTIC (computed from current results/*.csv)
+Flow-stat rows: 3052
+Switches seen: [1, 2, 3]
+Nonzero delta_bytes rows: 878
+Maximum recorded rate_mbps: 0.784
+Sender files: ['sender_1.csv', 'sender_2.csv', 'sender_3.csv', 'sender_5.csv']
+Receiver files: []
+Controller event file exists: True
+Controller event file bytes: 0
