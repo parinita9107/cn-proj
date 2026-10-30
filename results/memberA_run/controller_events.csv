@@ -1,0 +1,4 @@
+timestamp,event,test_id,target_rate_mbps,data
+1793111598.1744754,test_start,99,,"{""event"": ""test_start"", ""test_id"": 99}"
+1793112028.006408,test_start,2,5.0,"{""event"": ""test_start"", ""test_id"": 2, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""target_rate_mbps"": 5.0, ""payload_size"": 1000, ""duration_s"": 20.0, ""ts"": 1793112027.994259}"
+1793112048.408439,test_end,2,,"{""event"": ""test_end"", ""test_id"": 2, ""rx_pkts"": 12500, ""rx_bytes"": 12500000, ""expected_pkts"": 12500, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 20.099, ""ts"": 1793112048.3634186}"
