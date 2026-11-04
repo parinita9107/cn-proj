@@ -1,0 +1,2 @@
+timestamp,event,test_id,target_rate_mbps,data
+1793810163.6235287,rate_limit_on,D2,5.0,"{""switch"": 1, ""meter_id"": 1, ""trigger_mbps"": 6.0, ""limit_mbps"": 5.0, ""flow"": ""10.0.0.1 -> 10.0.0.2 UDP/5001""}"
