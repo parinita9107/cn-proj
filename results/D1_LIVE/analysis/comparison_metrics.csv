@@ -1,0 +1,10 @@
+metric,value,unit,source
+application_payload_bytes,12500000.0,bytes,receiver preferred; sender fallback
+network_bytes_s1_measurement_flow,13025368.0,bytes,s1 measurement flow only
+application_packets,12500.0,packets,receiver preferred; sender fallback
+network_packets_s1_measurement_flow,12506.0,packets,s1 measurement flow only
+application_mean_interval_mbps,5.000400000000001,Mbps,application CSV
+network_mean_interval_mbps,0.01095603293977935,Mbps,s1 flowstats CSV
+receiver_mean_loss_pct,,%,receiver CSV; not inferred from OpenFlow
+network_to_application_byte_ratio,1.04202944,ratio,s1 network bytes / application payload bytes
+network_minus_application_bytes_pct,4.2029440000000005,%,relative to application payload bytes

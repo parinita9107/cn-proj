@@ -1,0 +1,4 @@
+log_type,rows,mean_interval_mbps,max_cumulative_or_logged_bytes,max_cumulative_or_logged_packets,mean_loss_pct
+sender,20,5.000400000000001,12500000.0,12500.0,
+flowstats_s1_measurement_flow,9156,0.01095603293977935,13025368.0,12506.0,
+controller_events,1,,,,
