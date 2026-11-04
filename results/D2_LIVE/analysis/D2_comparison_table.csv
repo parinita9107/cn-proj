@@ -1,0 +1,2 @@
+Experiment,Sender target Mbps,Meter limit Mbps,Mean sender Mbps,Minimum sender Mbps,Maximum sender Mbps,Packets sent,Application bytes sent,OpenFlow meter-flow packets,OpenFlow meter-flow bytes
+D2 Dynamic,10,5,10.0004,9.9956,10.0074,25000,25000000,1426,1482948
