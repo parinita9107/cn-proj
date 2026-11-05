@@ -45,6 +45,9 @@ def parse_args(argv=None):
     ap.add_argument("--log-dir", default=".", help="directory for sender_<id>.csv (default .)")
     ap.add_argument("--ctrl-url", default=None, help="controller REST URL (default $CTRL_URL or http://127.0.0.1:8080)")
     ap.add_argument("--no-ctrl", action="store_true", help="do not contact the controller")
+    ap.add_argument("--target-rate", type=float, default=None,
+                    help="rate in Mbit/s declared to the controller in test_start (default: same as --rate); "
+                         "set it lower than --rate to emulate a flow that exceeds its declared rate")
     ap.add_argument("--drop-prob", type=float, default=0.0,
                     help="TEST MODE: probability (0-1) of deliberately not sending a packet, to check loss detection")
     ap.add_argument("--seed", type=int, default=None, help="random seed for --drop-prob")
@@ -63,6 +66,8 @@ def parse_args(argv=None):
         problems.append(f"--size must be {HEADER_SIZE}-{MAX_PAYLOAD}")
     if args.duration <= 0:
         problems.append("--duration must be greater than 0")
+    if args.target_rate is not None and args.target_rate <= 0:
+        problems.append("--target-rate must be greater than 0")
     if not 0 <= args.drop_prob < 1:
         problems.append("--drop-prob must be in [0, 1)")
     if problems:
@@ -99,8 +104,12 @@ def main(argv=None):
     signal.signal(signal.SIGTERM, lambda *_: interrupted.update(flag=True))
 
     if not args.no_ctrl:
-        ctrl_client.send_test_start(args.test_id, src_ip, args.dst, args.port, args.rate,
+        declared = args.target_rate if args.target_rate is not None else args.rate
+        ctrl_client.send_test_start(args.test_id, src_ip, args.dst, args.port, declared,
                                     args.size, args.duration, args.ctrl_url)
+        if declared != args.rate:
+            log.info("declared target %.2f Mbit/s to the controller, sending at %.2f Mbit/s",
+                     declared, args.rate)
 
     log.info("test %d: %.2f Mbit/s, %d B payload, %.1f s -> %s:%d (%d packets planned)",
              args.test_id, args.rate, args.size, args.duration, args.dst, args.port, total_planned)
