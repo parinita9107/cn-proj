@@ -1,0 +1,5 @@
+ts,event,flow_id,detail
+1793825911.0715897,test_start,10.0.0.4>10.0.0.5:5002,"{""event"": ""test_start"", ""test_id"": 401, ""src"": ""10.0.0.4"", ""dst"": ""10.0.0.5"", ""dst_port"": 5002, ""target_rate_mbps"": 10, ""packet_size"": 1000, ""duration_s"": 30}"
+1793825959.7306643,flow_removed,10.0.0.5>10.0.0.4:35474,dpid=2 pkts=1 bytes=170 duration=10
+1793825959.7312446,flow_removed,10.0.0.5>10.0.0.4:35474,dpid=1 pkts=1 bytes=170 duration=10
+1793825959.731771,flow_removed,10.0.0.5>10.0.0.4:35474,dpid=3 pkts=1 bytes=170 duration=10

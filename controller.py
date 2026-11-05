@@ -59,6 +59,10 @@ class BwMeter(app_manager.RyuApp):
         self.datapaths = {}
         self.prev = {}      # (dpid, flow_id) -> (pkts, bytes, ts)
         self.tests = {}
+        self.flow_meters = {}
+        self.next_meter_ids = {}
+        self.rate_limited = {}
+        self.low_rate_polls = {}
         kwargs['wsgi'].register(TestApi, {'app': self})
         self.monitor_thread = hub.spawn(self._monitor)
         self.logger.info('Controller started, mode=%s, out=%s',
@@ -81,6 +85,23 @@ class BwMeter(app_manager.RyuApp):
     @staticmethod
     def _fid(src, dst, port):
         return '%s>%s:%s' % (src, dst, port)
+    def _is_registered_test_flow(self, src, dst, dst_port):
+        for body in reversed(list(self.tests.values())):
+            if (body.get('src') == src and
+                body.get('dst') == dst and
+                int(body.get('dst_port', -1)) == int(dst_port)):
+                return True
+        return False
+    def _target_rate_kbps(self, src, dst, dst_port):
+        for body in reversed(list(self.tests.values())):
+            if (body.get('src') == src and
+                body.get('dst') == dst and
+                int(body.get('dst_port', -1)) == int(dst_port)):
+                rate = float(body.get('target_rate_mbps', 0))
+                if rate > 0:
+                    return max(1, int(rate * 1000))
+
+        return int(os.environ.get('METER_RATE_KBPS', '5000'))
 
     def add_flow(self, dp, priority, match, actions, idle=0, flags=0):
         ofp, parser = dp.ofproto, dp.ofproto_parser
@@ -109,6 +130,27 @@ class BwMeter(app_manager.RyuApp):
         )
 
         dp.send_msg(request)
+    def modify_meter(self, dp, meter_id, rate_kbps):
+        ofp = dp.ofproto
+        parser = dp.ofproto_parser
+
+        bands = [
+            parser.OFPMeterBandDrop(
+                rate=rate_kbps,
+                burst_size=0
+            )
+        ]
+
+        request = parser.OFPMeterMod(
+            datapath=dp,
+            command=ofp.OFPMC_MODIFY,
+            flags=ofp.OFPMF_KBPS,
+            meter_id=meter_id,
+            bands=bands
+        )
+
+        dp.send_msg(request)
+
     # ---------- REST callback ----------
     def on_test_event(self, body):
         ev = body.get('event', 'unknown')
@@ -189,18 +231,29 @@ class BwMeter(app_manager.RyuApp):
                 self._metered_dpids = set()
 
             try:
-                meter_id = 1
-                rate_kbps = int(
-                    os.environ.get('METER_RATE_KBPS', '5000')
-                )
+                fid = self._fid(ip.src, ip.dst, u.dst_port)
+                meter_key = (dp.id, fid)
 
-                # Install the meter only once per switch.
-                if dp.id not in self._metered_dpids:
+        # Start with a permissive meter.
+                # The stats handler will activate the target limit when needed.
+                rate_kbps = 1000000
+
+                meter_id = self.flow_meters.get(meter_key)
+
+                if meter_id is None:
+                    meter_id = self.next_meter_ids.get(dp.id, 1)
+
+                    if meter_id > 65535:
+                        raise RuntimeError("No available meter IDs")
+
+                    self.next_meter_ids[dp.id] = meter_id + 1
+
                     self.add_meter(dp, meter_id, rate_kbps)
-                    self._metered_dpids.add(dp.id)
+                    self.flow_meters[meter_key] = meter_id
+
                     self.logger.info(
-                        "METER INSTALL REQUEST dpid=%s rate=%s Kbps",
-                        dp.id, rate_kbps
+                        "METER INSTALL REQUEST dpid=%s meter=%s rate=%s Kbps",
+                        dp.id, meter_id, rate_kbps
                     )
 
                 instructions = [
@@ -286,23 +339,90 @@ class BwMeter(app_manager.RyuApp):
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _stats_reply(self, ev):
         now = time.time()
-        dpid = ev.msg.datapath.id
+        dp = ev.msg.datapath
+        dpid = dp.id
+
         for st in ev.msg.body:
             if st.priority != UDP_PRIO:
                 continue
+
             m = st.match
-            fid = self._fid(m['ipv4_src'], m['ipv4_dst'], m['udp_dst'])
+            src = m['ipv4_src']
+            dst = m['ipv4_dst']
+            port = m['udp_dst']
+
+            fid = self._fid(src, dst, port)
             key = (dpid, fid)
+
             p0, b0, t0 = self.prev.get(key, (0, 0, None))
-            if st.byte_count < b0:          # flow was re-installed
+
+            if st.byte_count < b0:
                 p0, b0 = 0, 0
-            dpk, dby = st.packet_count - p0, st.byte_count - b0
+
+            dpk = st.packet_count - p0
+            dby = st.byte_count - b0
             dt = (now - t0) if t0 else POLL_S
+
             rate = dby * 8 / dt / 1e6 if dt > 0 else 0.0
+
             self.prev[key] = (st.packet_count, st.byte_count, now)
-            self._append('flowstats.csv', FLOW_HDR,
-                         [now, dpid, fid, st.packet_count, st.byte_count,
-                          st.duration_sec, dpk, dby, round(rate, 3)])
+
+            self._append(
+                'flowstats.csv', FLOW_HDR,
+                [now, dpid, fid, st.packet_count, st.byte_count,
+                 st.duration_sec, dpk, dby, round(rate, 3)]
+            )
+
+            if not self._is_registered_test_flow(src, dst, port):
+                continue
+
+            target = self._target_rate_kbps(src, dst, port) / 1000.0
+            meter_id = self.flow_meters.get(key)
+
+            if meter_id is None:
+                continue
+
+            is_limited = self.rate_limited.get(key, False)
+
+            if rate > target * 1.20 and not is_limited:
+                self.modify_meter(dp, meter_id, int(target * 1000))
+                self.rate_limited[key] = True
+                self.low_rate_polls[key] = 0
+
+                self._event(
+                    'rate_limit_on', fid,
+                    'measured=%.3f Mbps target=%.3f Mbps meter=%s' %
+                    (rate, target, meter_id)
+                )
+
+                self.logger.info(
+                    'RATE LIMIT ON dpid=%s flow=%s measured=%.3f target=%.3f',
+                    dpid, fid, rate, target
+                )
+
+            elif is_limited:
+                if 0 < rate < target * 0.50:
+                    self.low_rate_polls[key] = (
+                        self.low_rate_polls.get(key, 0) + 1
+                    )
+                else:
+                    self.low_rate_polls[key] = 0
+
+                if self.low_rate_polls[key] >= 5:
+                    self.modify_meter(dp, meter_id, 1000000)
+                    self.rate_limited[key] = False
+                    self.low_rate_polls[key] = 0
+
+                    self._event(
+                        'rate_limit_off', fid,
+                        'measured=%.3f Mbps target=%.3f Mbps meter=%s' %
+                        (rate, target, meter_id)
+                    )
+
+                    self.logger.info(
+                        'RATE LIMIT OFF dpid=%s flow=%s',
+                        dpid, fid
+                    )
 
     @set_ev_cls(ofp_event.EventOFPFlowRemoved, MAIN_DISPATCHER)
     def _flow_removed(self, ev):
@@ -316,3 +436,13 @@ class BwMeter(app_manager.RyuApp):
                         msg.datapath.id, msg.packet_count,
                         msg.byte_count, msg.duration_sec))
         self.prev.pop((msg.datapath.id, fid), None)
+    @set_ev_cls(ofp_event.EventOFPErrorMsg, MAIN_DISPATCHER)
+    def _openflow_error(self, ev):
+        msg = ev.msg
+        self.logger.error(
+            'OPENFLOW ERROR dpid=%s type=%s code=%s data=%s',
+            msg.datapath.id,
+            msg.type,
+            msg.code,
+            msg.data.hex()
+        )
