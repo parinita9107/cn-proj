@@ -1,0 +1,83 @@
+ts,event,flow_id,detail
+1793807854.1302092,test_start,?>?:?,"{""event"": ""test_start"", ""test_id"": 12, ""src_ip"": ""10.0.0.3"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5002, ""target_rate_mbps"": 5.0, ""payload_size"": 500, ""duration_s"": 20.0, ""ts"": 1793807854.1221228}"
+1793807865.3279717,test_start,?>?:?,"{""event"": ""test_start"", ""test_id"": 11, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""target_rate_mbps"": 5.0, ""payload_size"": 1000, ""duration_s"": 20.0, ""ts"": 1793807865.3161902}"
+1793807874.5105472,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 12, ""rx_pkts"": 25000, ""rx_bytes"": 12500000, ""expected_pkts"": 25000, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 20.012, ""ts"": 1793807874.4878595}"
+1793807884.5419853,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=1 pkts=25002 bytes=13549644 duration=30
+1793807884.543089,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=3 pkts=24904 bytes=13496528 duration=30
+1793807884.5434363,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=2 pkts=24985 bytes=13540430 duration=30
+1793807885.7001672,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 11, ""rx_pkts"": 12500, ""rx_bytes"": 12500000, ""expected_pkts"": 12500, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 19.903, ""ts"": 1793807885.6822805}"
+1793807895.5672128,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=12456 bytes=12976212 duration=30
+1793807895.567326,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=12500 bytes=13022060 duration=30
+1793807895.5673885,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=12402 bytes=12919944 duration=29
+1793812115.5838742,test_start,?>?:?,"{""event"": ""test_start"", ""test_id"": 22, ""src_ip"": ""10.0.0.3"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5002, ""target_rate_mbps"": 5.0, ""payload_size"": 500, ""duration_s"": 20.0, ""ts"": 1793812115.579302}"
+1793812127.070394,test_start,?>?:?,"{""event"": ""test_start"", ""test_id"": 21, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""target_rate_mbps"": 5.0, ""payload_size"": 1000, ""duration_s"": 20.0, ""ts"": 1793812127.0571635}"
+1793812135.982414,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 22, ""rx_pkts"": 25000, ""rx_bytes"": 12500000, ""expected_pkts"": 25000, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 20.101, ""ts"": 1793812135.9377491}"
+1793812147.4635222,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 21, ""rx_pkts"": 12500, ""rx_bytes"": 12500000, ""expected_pkts"": 12500, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 19.785, ""ts"": 1793812147.4324408}"
+1793812157.5347548,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=12317 bytes=12831374 duration=29
+1793812157.5506334,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=12493 bytes=13014766 duration=30
+1793812157.5508049,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=12473 bytes=12993926 duration=30
+1793850425.879112,test_start,10.0.0.1>10.0.0.2:5001,"{""event"": ""test_start"", ""test_id"": 41, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""src"": ""10.0.0.1"", ""dst"": ""10.0.0.2"", ""dst_port"": 5001, ""target_rate_mbps"": 5.0, ""payload_size"": 1000, ""duration_s"": 30.0, ""ts"": 1793850425.8709283}"
+1793850426.8235137,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=6.194 Mbps target=5.000 Mbps meter=1
+1793850427.5069187,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=20.052 Mbps target=5.000 Mbps meter=1
+1793850427.5073886,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=15.172 Mbps target=5.000 Mbps meter=1
+1793850456.3824482,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 41, ""rx_pkts"": 19207, ""rx_bytes"": 19207000, ""expected_pkts"": 37500, ""lost_pkts"": 18293, ""loss_pct"": 48.7813, ""duration_s"": 29.818, ""ts"": 1793850456.3529584}"
+1793850466.403191,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=18833 bytes=19622026 duration=39
+1793850466.403611,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=37488 bytes=39059556 duration=40
+1793850466.4057121,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=19170 bytes=19973180 duration=40
+1793897757.312911,test_start,10.0.0.3>10.0.0.2:5002,"{""event"": ""test_start"", ""test_id"": 32, ""src_ip"": ""10.0.0.3"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5002, ""src"": ""10.0.0.3"", ""dst"": ""10.0.0.2"", ""dst_port"": 5002, ""target_rate_mbps"": 2.0, ""payload_size"": 200, ""duration_s"": 60.0, ""ts"": 1793897757.3042645}"
+1793897759.4719586,rate_limit_on,10.0.0.3>10.0.0.2:5002,measured=2.423 Mbps target=2.000 Mbps meter=1
+1793897759.4728205,rate_limit_on,10.0.0.3>10.0.0.2:5002,measured=2.420 Mbps target=2.000 Mbps meter=1
+1793897759.4733293,rate_limit_on,10.0.0.3>10.0.0.2:5002,measured=2.418 Mbps target=2.000 Mbps meter=1
+1793897763.7808008,test_start,10.0.0.4>10.0.0.5:5003,"{""event"": ""test_start"", ""test_id"": 33, ""src_ip"": ""10.0.0.4"", ""dst_ip"": ""10.0.0.5"", ""udp_port"": 5003, ""src"": ""10.0.0.4"", ""dst"": ""10.0.0.5"", ""dst_port"": 5003, ""target_rate_mbps"": 3.0, ""payload_size"": 500, ""duration_s"": 60.0, ""ts"": 1793897763.7690582}"
+1793897765.4915967,rate_limit_on,10.0.0.4>10.0.0.5:5003,measured=3.954 Mbps target=3.000 Mbps meter=2
+1793897765.4927573,rate_limit_on,10.0.0.4>10.0.0.5:5003,measured=6.239 Mbps target=3.000 Mbps meter=2
+1793897765.495656,rate_limit_on,10.0.0.4>10.0.0.5:5003,measured=3.907 Mbps target=3.000 Mbps meter=2
+1793897770.9608057,test_start,10.0.0.1>10.0.0.2:5001,"{""event"": ""test_start"", ""test_id"": 31, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""src"": ""10.0.0.1"", ""dst"": ""10.0.0.2"", ""dst_port"": 5001, ""target_rate_mbps"": 10.0, ""payload_size"": 1400, ""duration_s"": 60.0, ""ts"": 1793897770.9404254}"
+1793897772.9430192,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=18.145 Mbps target=10.000 Mbps meter=3
+1793897772.9458246,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=13.455 Mbps target=10.000 Mbps meter=3
+1793897774.3095057,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=20606.579 Mbps target=10.000 Mbps meter=3
+1793897817.7108123,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 32, ""rx_pkts"": 63483, ""rx_bytes"": 12696600, ""expected_pkts"": 75000, ""lost_pkts"": 11517, ""loss_pct"": 15.356, ""duration_s"": 60.025, ""ts"": 1793897817.6681607}"
+1793897818.256981,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 31, ""rx_pkts"": 41579, ""rx_bytes"": 58210600, ""expected_pkts"": 41887, ""lost_pkts"": 308, ""loss_pct"": 0.7353, ""duration_s"": 46.118, ""ts"": 1793897818.2397487}"
+1793897824.17716,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 33, ""rx_pkts"": 42303, ""rx_bytes"": 21151500, ""expected_pkts"": 45000, ""lost_pkts"": 2697, ""loss_pct"": 5.9933, ""duration_s"": 59.726, ""ts"": 1793897824.1499374}"
+1793897827.896478,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=3 pkts=63397 bytes=15341714 duration=70
+1793897827.896704,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=2 pkts=63460 bytes=15356960 duration=70
+1793897827.8968246,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=1 pkts=74997 bytes=18148734 duration=70
+1793897828.407233,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=41855 bytes=60350770 duration=57
+1793897828.4138126,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=40857 bytes=58911654 duration=54
+1793897828.4146435,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=41384 bytes=59671588 duration=56
+1793897833.9621398,flow_removed,10.0.0.4>10.0.0.5:5003,dpid=1 pkts=44993 bytes=24384766 duration=70
+1793897833.9631696,flow_removed,10.0.0.4>10.0.0.5:5003,dpid=3 pkts=42041 bytes=22784782 duration=68
+1793897833.9633725,flow_removed,10.0.0.4>10.0.0.5:5003,dpid=2 pkts=42283 bytes=22915946 duration=69
+1793938099.3469841,test_start,10.0.0.1>10.0.0.2:5001,"{""event"": ""test_start"", ""test_id"": 42, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""src"": ""10.0.0.1"", ""dst"": ""10.0.0.2"", ""dst_port"": 5001, ""target_rate_mbps"": 5.0, ""payload_size"": 1000, ""duration_s"": 30.0, ""ts"": 1793938099.336686}"
+1793938100.714537,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=10.419 Mbps target=5.000 Mbps meter=1
+1793938100.7148614,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=10.431 Mbps target=5.000 Mbps meter=1
+1793938100.7152343,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=10.426 Mbps target=5.000 Mbps meter=1
+1793938129.8596907,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 42, ""rx_pkts"": 19476, ""rx_bytes"": 19476000, ""expected_pkts"": 37500, ""lost_pkts"": 18024, ""loss_pct"": 48.064, ""duration_s"": 30.032, ""ts"": 1793938129.8031466}"
+1793938139.866761,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=37497 bytes=39068934 duration=40
+1793938139.8683393,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=19469 bytes=20283758 duration=40
+1793938139.8687878,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=19443 bytes=20256666 duration=40
+1793938678.2549267,test_start,10.0.0.3>10.0.0.2:5002,"{""event"": ""test_start"", ""test_id"": 32, ""src_ip"": ""10.0.0.3"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5002, ""src"": ""10.0.0.3"", ""dst"": ""10.0.0.2"", ""dst_port"": 5002, ""target_rate_mbps"": 2.0, ""payload_size"": 200, ""duration_s"": 60.0, ""ts"": 1793938678.240146}"
+1793938684.5819857,test_start,10.0.0.4>10.0.0.5:5003,"{""event"": ""test_start"", ""test_id"": 33, ""src_ip"": ""10.0.0.4"", ""dst_ip"": ""10.0.0.5"", ""udp_port"": 5003, ""src"": ""10.0.0.4"", ""dst"": ""10.0.0.5"", ""dst_port"": 5003, ""target_rate_mbps"": 3.0, ""payload_size"": 500, ""duration_s"": 60.0, ""ts"": 1793938684.5692067}"
+1793938690.7379513,test_start,10.0.0.1>10.0.0.2:5001,"{""event"": ""test_start"", ""test_id"": 31, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""src"": ""10.0.0.1"", ""dst"": ""10.0.0.2"", ""dst_port"": 5001, ""target_rate_mbps"": 10.0, ""payload_size"": 1400, ""duration_s"": 60.0, ""ts"": 1793938690.716106}"
+1793938738.6589825,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 32, ""rx_pkts"": 75000, ""rx_bytes"": 15000000, ""expected_pkts"": 75000, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 59.964, ""ts"": 1793938738.6085963}"
+1793938744.9554038,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 33, ""rx_pkts"": 45000, ""rx_bytes"": 22500000, ""expected_pkts"": 45000, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 60.02, ""ts"": 1793938744.9375036}"
+1793938748.4689872,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=1 pkts=75000 bytes=18149460 duration=70
+1793938748.4691377,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=2 pkts=74995 bytes=18148250 duration=70
+1793938748.469215,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=3 pkts=74859 bytes=18115338 duration=69
+1793938751.182137,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 31, ""rx_pkts"": 53571, ""rx_bytes"": 74999400, ""expected_pkts"": 53571, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 59.573, ""ts"": 1793938751.1626475}"
+1793938755.0998654,flow_removed,10.0.0.4>10.0.0.5:5003,dpid=3 pkts=44961 bytes=24367422 duration=70
+1793938755.1010716,flow_removed,10.0.0.4>10.0.0.5:5003,dpid=1 pkts=45001 bytes=24389102 duration=70
+1793938755.101466,flow_removed,10.0.0.4>10.0.0.5:5003,dpid=2 pkts=44986 bytes=24380972 duration=70
+1793938761.2491155,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=53573 bytes=77248126 duration=70
+1793938761.2502692,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=53051 bytes=76495402 duration=68
+1793938761.251209,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=53492 bytes=77131324 duration=69
+1793953315.954925,test_start,10.0.0.3>10.0.0.2:5002,"{""event"": ""test_start"", ""test_id"": 32, ""src_ip"": ""10.0.0.3"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5002, ""src"": ""10.0.0.3"", ""dst"": ""10.0.0.2"", ""dst_port"": 5002, ""target_rate_mbps"": 2.0, ""payload_size"": 200, ""duration_s"": 60.0, ""ts"": 1793953315.9467216}"
+1793953326.1606913,test_start,10.0.0.1>10.0.0.2:5001,"{""event"": ""test_start"", ""test_id"": 31, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""src"": ""10.0.0.1"", ""dst"": ""10.0.0.2"", ""dst_port"": 5001, ""target_rate_mbps"": 10.0, ""payload_size"": 1400, ""duration_s"": 60.0, ""ts"": 1793953326.144957}"
+1793953376.3402958,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 32, ""rx_pkts"": 75000, ""rx_bytes"": 15000000, ""expected_pkts"": 75000, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 60.061, ""ts"": 1793953376.3093286}"
+1793953386.362339,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=1 pkts=74998 bytes=18148976 duration=70
+1793953386.36313,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=3 pkts=74966 bytes=18141232 duration=70
+1793953386.3632162,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=2 pkts=74992 bytes=18147524 duration=70
+1793953386.5213184,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 31, ""rx_pkts"": 53571, ""rx_bytes"": 74999400, ""expected_pkts"": 53571, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 59.902, ""ts"": 1793953386.5139499}"
+1793953396.3956063,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=53553 bytes=77219286 duration=70
+1793953396.3957183,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=53407 bytes=77008754 duration=69
+1793953396.395778,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=53573 bytes=77248126 duration=70
