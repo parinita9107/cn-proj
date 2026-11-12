@@ -1,0 +1,10 @@
+{
+  "name": "size_sweep",
+  "controller_mode": ["static", "dynamic"],
+  "rate_mbps": 5,
+  "packet_size": [200, 500, 1000, 1400],
+  "duration": 15,
+  "scenario": "none",
+  "test_id": 200,
+  "repeats": 3
+}

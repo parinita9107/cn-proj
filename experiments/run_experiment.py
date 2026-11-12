@@ -1,18 +1,33 @@
 #!/usr/bin/env python3
-"""Run Project 26 experiments through the existing Mininet CLI topology.
+"""Run Project 26 experiments automatically (controller + Mininet + UDP app).
 
-This runner matches the project's D1 interfaces:
-  * Ryu: ryu-manager --wsapi-host 0.0.0.0 --wsapi-port 8080 --observe-links
-  * Mininet topology: sdn/topology.py (opens the Mininet CLI)
-  * Receiver: app/receiver.py --port --test-id --log-dir --ctrl-url
-  * Sender: app/sender.py --dst --port --rate --size --duration --test-id --log-dir --ctrl-url
+For every run it:
+  1. cleans Mininet (sudo mn -c)  -- BEFORE starting Ryu, because mn -c kills ryu-manager
+  2. starts Ryu with sdn/controller.py in the requested mode (static|dynamic)
+  3. starts sdn/topology.py and drives its Mininet CLI through stdin
+  4. applies the scenario, starts receiver(s) on h2 and sender(s) on h1/h3
+  5. saves everything in results/<run_name>/ and writes run_meta.json
 
-Run from an activated environment containing Ryu. Mininet is launched with sudo.
+A config may give a single value or a list for controller_mode, rate_mbps and
+packet_size; the runner expands the full combination and repeats it.
+
+Examples:
+  python3 experiments/run_experiment.py --config experiments/configs/normal.json
+  python3 experiments/run_experiment.py --all
+  python3 experiments/run_experiment.py --all --dry-run       # print the plan only
+  python3 experiments/run_experiment.py --config experiments/configs/load_sweep.json --repeats 1
+
+Scenarios:
+  none        measurement flow h1 -> h2 only
+  congestion  + background flow h3 -> h2 (bg_rate_mbps, declares bg_target_mbps to
+              the controller; in dynamic mode the controller meters it down)
+  packet_loss + netem loss (loss_pct %) on the s2 -> s3 core link
 """
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import os
 import shutil
@@ -24,196 +39,233 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SCENARIOS = ("none", "congestion", "packet_loss")
+BG_PORT = 5002
+BG_TEST_ID_OFFSET = 5000          # background flow test id = measurement id + 5000
+LOSS_INTF = ("s2", "s2-eth2")     # s2 side of the s2-s3 core link (see sdn/topology.py)
+CORE_BW = 20                      # Mbps, must match sdn/topology.py
+
+
+def as_list(value):
+    return value if isinstance(value, list) else [value]
 
 
 def load_config(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as handle:
         cfg = json.load(handle)
-    required = ["name", "controller_mode", "rate_mbps", "packet_size", "duration", "scenario", "test_id"]
+    required = ["name", "controller_mode", "rate_mbps", "packet_size", "duration", "test_id"]
     missing = [key for key in required if key not in cfg]
     if missing:
         raise ValueError(f"{path}: missing config fields: {', '.join(missing)}")
-    if not str(cfg["name"]).strip():
-        raise ValueError(f"{path}: name must not be empty")
-    if cfg["controller_mode"] not in ("static", "dynamic"):
-        raise ValueError(f"{path}: controller_mode must be static or dynamic")
-    for key in ("rate_mbps", "packet_size", "duration", "test_id"):
-        if float(cfg[key]) <= 0:
-            raise ValueError(f"{path}: {key} must be greater than zero")
-    if int(cfg["packet_size"]) < 20:
-        raise ValueError(f"{path}: packet_size must be at least 20 bytes for the project header")
+    cfg.setdefault("scenario", "none")
+    cfg.setdefault("repeats", 1)
+    if cfg["scenario"] not in SCENARIOS:
+        raise ValueError(f"{path}: scenario must be one of {SCENARIOS}")
+    for mode in as_list(cfg["controller_mode"]):
+        if mode not in ("static", "dynamic"):
+            raise ValueError(f"{path}: controller_mode must be static or dynamic")
+    for rate in as_list(cfg["rate_mbps"]):
+        if float(rate) <= 0:
+            raise ValueError(f"{path}: rate_mbps must be > 0")
+    for size in as_list(cfg["packet_size"]):
+        if not 20 <= int(size) <= 1472:
+            raise ValueError(f"{path}: packet_size must be 20-1472 bytes")
+    if float(cfg["duration"]) <= 0:
+        raise ValueError(f"{path}: duration must be > 0")
     return cfg
 
 
-def safe_name(value: str) -> str:
-    cleaned = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in value.strip())
-    return cleaned.strip("_") or "experiment"
+def expand(cfg: dict, repeats: int) -> list[dict]:
+    """One dict per individual run (mode x rate x size x repeat)."""
+    runs = []
+    combos = itertools.product(as_list(cfg["controller_mode"]), as_list(cfg["rate_mbps"]),
+                               as_list(cfg["packet_size"]), range(1, repeats + 1))
+    for i, (mode, rate, size, rep) in enumerate(combos):
+        run = dict(cfg)
+        run.update(controller_mode=mode, rate_mbps=float(rate), packet_size=int(size),
+                   repeat=rep, test_id=int(cfg["test_id"]) + i)
+        runs.append(run)
+    return runs
 
 
-def wait_for_controller(proc: subprocess.Popen, log_path: Path, seconds: float = 5.0) -> None:
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        if proc.poll() is not None:
-            raise RuntimeError(f"Ryu exited with code {proc.returncode}; inspect {log_path}")
-        time.sleep(0.25)
+def safe(value) -> str:
+    text = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in str(value).strip())
+    return text.strip("_") or "x"
 
 
-def build_cli_script(cfg: dict, result_dir: Path, project_root: Path, rest_url: str) -> str:
-    app_dir = project_root / "app"
-    # Commands are sent to Mininet's CLI stdin. '&' backgrounds the receiver,
-    # allowing the sender command to run while the receiver listens on h2.
-    commands = [
-        "pingall",
-        f"h2 python3 {app_dir / 'receiver.py'} --port {int(cfg.get('port', 5001))} --test-id {int(cfg['test_id'])} --log-dir {result_dir} --ctrl-url {rest_url} &",
-        "sh sleep 2",
-        f"h1 python3 {app_dir / 'sender.py'} --dst {cfg.get('destination', '10.0.0.2')} --port {int(cfg.get('port', 5001))} --rate {float(cfg['rate_mbps'])} --size {int(cfg['packet_size'])} --duration {float(cfg['duration'])} --test-id {int(cfg['test_id'])} --log-dir {result_dir} --ctrl-url {rest_url}",
-        "sh ovs-ofctl -O OpenFlow13 dump-flows s1",
-        "exit",
-    ]
-    return "\n".join(commands) + "\n"
+def run_name(run: dict) -> str:
+    rate = f"{run['rate_mbps']:g}".replace(".", "p")
+    return (f"{safe(run['name'])}_{run['controller_mode']}_r{rate}_s{run['packet_size']}"
+            f"_rep{run['repeat']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
 
 
-def run_one(config_path: Path, cfg: dict, args: argparse.Namespace) -> int:
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_name = f"{safe_name(str(cfg['name']))}_{cfg['controller_mode']}_{stamp}"
-    result_dir = (args.results_root / run_name).resolve()
-    result_dir.mkdir(parents=True, exist_ok=False)
+def build_cli_script(run: dict, out: Path, ctrl_url: str) -> str:
+    """Commands typed into the Mininet CLI. Paths are relative to the project root."""
+    tid, port = int(run["test_id"]), int(run.get("port", 5001))
+    dur = float(run["duration"])
+    dst = run.get("destination", "10.0.0.2")
+    common = f"--log-dir {out} --ctrl-url {ctrl_url}"
+    cmds = ["sh sleep 3", "pingall"]   # give switches time to connect; pingall teaches MACs
 
-    rest_host = args.rest_host
-    rest_url = f"http://{rest_host}:{args.rest_port}/test"
-    env = os.environ.copy()
-    env["CONTROLLER_MODE"] = str(cfg["controller_mode"])
-    env["PROJECT26_TEST_ID"] = str(cfg["test_id"])
-    env["RESULTS_DIR"] = str(result_dir)
+    if run["scenario"] == "packet_loss":
+        node, intf = LOSS_INTF
+        cmds.append(f"py {node}.intf('{intf}').config(bw={CORE_BW}, loss={float(run.get('loss_pct', 5))})")
 
-    controller_log_path = result_dir / "controller_stdout.log"
-    topology_log_path = result_dir / "topology_stdout.log"
-    controller = None
-    topology = None
-    controller_log = None
-    topology_log = None
+    cmds.append(f"h2 python3 app/receiver.py --port {port} --test-id {tid} {common} &")
 
-    print(f"\n=== {run_name} ===")
-    print("Config:", json.dumps(cfg, indent=2))
-    print("Results:", result_dir)
+    if run["scenario"] == "congestion":
+        bg_id = tid + BG_TEST_ID_OFFSET
+        bg_rate = float(run.get("bg_rate_mbps", CORE_BW))
+        bg_target = float(run.get("bg_target_mbps", bg_rate / 2))
+        cmds.append(f"h2 python3 app/receiver.py --port {BG_PORT} --test-id {bg_id} {common} &")
+        cmds.append("sh sleep 1")
+        cmds.append(f"h3 python3 app/sender.py --dst {dst} --port {BG_PORT} --rate {bg_rate} "
+                    f"--target-rate {bg_target} --size 1000 --duration {dur + 4} --test-id {bg_id} {common} &")
+        cmds.append("sh sleep 2")     # let the background flow fill the link first
+    else:
+        cmds.append("sh sleep 1")
 
-    if args.dry_run:
-        print("DRY RUN: no processes started and no result directory should be created beyond this preview.")
-        print("Controller:", args.ryu_manager, "--wsapi-host", "0.0.0.0", "--wsapi-port", str(args.rest_port), "--observe-links", "sdn/controller.py")
-        print("Topology:", "sudo -n python3 sdn/topology.py")
-        print("Mininet CLI commands:\n" + build_cli_script(cfg, result_dir, args.project_root, rest_url))
-        return 0
+    extra = f" --target-rate {float(run['target_rate_mbps'])}" if "target_rate_mbps" in run else ""
+    cmds.append(f"h1 python3 app/sender.py --dst {dst} --port {port} --rate {run['rate_mbps']}"
+                f" --size {run['packet_size']} --duration {dur} --test-id {tid}{extra} {common}")
+    cmds.append("sh sleep 5")         # receivers finish (END packet / idle timeout) and post test_end
+    for sw in ("s1", "s2", "s3"):
+        cmds.append(f"sh ovs-ofctl -O OpenFlow13 dump-flows {sw} > {out}/dump_flows_{sw}.txt")
+        cmds.append(f"sh ovs-ofctl -O OpenFlow13 dump-meters {sw} > {out}/dump_meters_{sw}.txt 2>&1")
+    cmds.append("exit")
+    return "\n".join(cmds) + "\n"
 
+
+def stop(proc: subprocess.Popen | None) -> None:
+    if proc is None or proc.poll() is not None:
+        return
     try:
-        # Ensure sudo credentials are available before piping commands to Mininet.
-        subprocess.run(["sudo", "-v"], check=True)
-        if shutil.which(args.ryu_manager) is None and not Path(args.ryu_manager).exists():
-            raise RuntimeError(f"Cannot find {args.ryu_manager!r}. Activate the Ryu virtual environment first.")
+        os.killpg(proc.pid, signal.SIGTERM)
+        proc.wait(timeout=5)
+    except (ProcessLookupError, PermissionError):
+        pass
+    except subprocess.TimeoutExpired:
+        subprocess.run(["sudo", "-n", "kill", "-9", f"-{proc.pid}"], check=False)
+        proc.wait()
 
-        controller_log = controller_log_path.open("w", encoding="utf-8")
-        controller_cmd = [args.ryu_manager, "--wsapi-host", "0.0.0.0", "--wsapi-port", str(args.rest_port), "--observe-links", "sdn/controller.py"]
-        controller = subprocess.Popen(controller_cmd, cwd=args.project_root, env=env, stdout=controller_log, stderr=subprocess.STDOUT, start_new_session=True)
-        wait_for_controller(controller, controller_log_path, args.controller_wait)
 
-        topology_log = topology_log_path.open("w", encoding="utf-8")
-        topology_cmd = ["sudo", "-n", "python3", "sdn/topology.py"]
-        topology = subprocess.Popen(topology_cmd, cwd=args.project_root, env=env, stdin=subprocess.PIPE, stdout=topology_log, stderr=subprocess.STDOUT, text=True, start_new_session=True)
-        script = build_cli_script(cfg, result_dir, args.project_root, rest_url)
+def cleanup_mininet(root: Path) -> None:
+    subprocess.run(["sudo", "-n", "mn", "-c"], cwd=root, check=False,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def run_one(run: dict, args: argparse.Namespace) -> bool:
+    name = run_name(run)
+    out_abs = args.results_root / name
+    out_rel = os.path.relpath(out_abs, args.project_root)
+    ctrl_url = f"http://{args.rest_host}:{args.rest_port}"      # ctrl_client appends /test
+    script = build_cli_script(run, Path(out_rel), ctrl_url)
+    ryu_cmd = [args.ryu_manager, "--ofp-tcp-listen-port", "6653",
+               "--wsapi-host", "0.0.0.0", "--wsapi-port", str(args.rest_port), "sdn/controller.py"]
+
+    print(f"\n=== {name} ===")
+    if args.dry_run:
+        print("Ryu:     ", f"CONTROLLER_MODE={run['controller_mode']} RESULTS_DIR={out_rel}", " ".join(ryu_cmd))
+        print("Topology: sudo python3 sdn/topology.py")
+        print("Mininet CLI input:\n  " + script.replace("\n", "\n  "))
+        return True
+
+    out_abs.mkdir(parents=True, exist_ok=False)
+    (out_abs / "run_meta.json").write_text(json.dumps(run, indent=2))
+    env = dict(os.environ, CONTROLLER_MODE=run["controller_mode"], RESULTS_DIR=str(out_rel))
+    ryu = topo = None
+    ryu_log = (out_abs / "controller_stdout.log").open("w")
+    topo_log = (out_abs / "topology_stdout.log").open("w")
+    ok = False
+    try:
+        cleanup_mininet(args.project_root)              # must happen BEFORE Ryu starts
+        ryu = subprocess.Popen(ryu_cmd, cwd=args.project_root, env=env, stdout=ryu_log,
+                               stderr=subprocess.STDOUT, start_new_session=True)
+        time.sleep(args.controller_wait)
+        if ryu.poll() is not None:
+            raise RuntimeError(f"Ryu exited early (code {ryu.returncode}); see {out_rel}/controller_stdout.log")
+
+        # No start_new_session here: sudo caches the password per terminal, and a new
+        # session has no terminal, so 'sudo -n' would refuse to run.
+        topo = subprocess.Popen(["sudo", "-n", "python3", "sdn/topology.py"], cwd=args.project_root,
+                                stdin=subprocess.PIPE, stdout=topo_log, stderr=subprocess.STDOUT,
+                                text=True)
+        timeout = float(run["duration"]) + 90
         try:
-            topology.communicate(script, timeout=float(cfg["duration"]) + args.topology_timeout_extra)
+            topo.communicate(script, timeout=timeout)
         except subprocess.TimeoutExpired:
-            os.killpg(topology.pid, signal.SIGTERM)
-            try:
-                topology.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                os.killpg(topology.pid, signal.SIGKILL)
-                topology.wait()
-            raise RuntimeError(f"Mininet did not finish in time; inspect {topology_log_path}")
+            raise RuntimeError(f"Mininet did not finish within {timeout:.0f} s; see {out_rel}/topology_stdout.log")
 
-        if topology.returncode != 0:
-            raise RuntimeError(f"Mininet topology exited with code {topology.returncode}; inspect {topology_log_path}")
-
-        # Controller writes flowstats/events. Allow its final buffers to flush.
-        time.sleep(2)
-        required_logs = [result_dir / f"sender_{int(cfg['test_id'])}.csv", result_dir / f"receiver_{int(cfg['test_id'])}.csv", result_dir / "flowstats.csv", result_dir / "controller_events.csv"]
-        missing_logs = [str(path.name) for path in required_logs if not path.exists()]
-        if missing_logs:
-            raise RuntimeError("Experiment ended but expected CSV files are missing: " + ", ".join(missing_logs) + f". Inspect {topology_log_path} and {controller_log_path}")
-        print("Experiment completed. CSV files:")
-        for path in required_logs:
-            print(f"  {path.name}: {path.stat().st_size} bytes")
-        return 0
-
+        time.sleep(2)                                   # last flow-stats poll / flow_removed events
+        tid = int(run["test_id"])
+        need = [f"sender_{tid}.csv", f"receiver_{tid}.csv", "flowstats.csv", "controller_events.csv"]
+        missing = [n for n in need if not (out_abs / n).exists()]
+        if missing:
+            raise RuntimeError(f"missing logs: {', '.join(missing)}; see {out_rel}/topology_stdout.log")
+        print(f"OK -> {out_rel}")
+        ok = True
+    except RuntimeError as exc:
+        print(f"FAILED {name}: {exc}", file=sys.stderr)
     finally:
-        if topology is not None and topology.poll() is None:
-            os.killpg(topology.pid, signal.SIGTERM)
+        if topo is not None and topo.poll() is None:
+            subprocess.run(["sudo", "-n", "pkill", "-f", "sdn/topology.py"], check=False)
             try:
-                topology.wait(timeout=5)
+                topo.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                os.killpg(topology.pid, signal.SIGKILL)
-                topology.wait()
-        if controller is not None and controller.poll() is None:
-            os.killpg(controller.pid, signal.SIGTERM)
-            try:
-                controller.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                os.killpg(controller.pid, signal.SIGKILL)
-                controller.wait()
-        if controller_log:
-            controller_log.close()
-        if topology_log:
-            topology_log.close()
-        # Mininet cleanup is safe even if topology startup failed part-way through.
-        subprocess.run(["sudo", "-n", "mn", "-c"], cwd=args.project_root, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                pass
+        stop(ryu)
+        ryu_log.close()
+        topo_log.close()
+        cleanup_mininet(args.project_root)
+        # receiver/sender ran as root inside Mininet; give the files back to the user
+        subprocess.run(["sudo", "-n", "chown", "-R", f"{os.getuid()}:{os.getgid()}", str(out_abs)], check=False)
+    return ok
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    selection = parser.add_mutually_exclusive_group(required=True)
-    selection.add_argument("--config", help="One JSON configuration")
-    selection.add_argument("--all", action="store_true", help="Run every JSON file in experiments/configs")
-    parser.add_argument("--dry-run", action="store_true", help="Print commands without starting controller or Mininet")
-    parser.add_argument("--project-root", type=Path, default=ROOT, help="Project root (default: detected from this script)")
-    parser.add_argument("--results-root", type=Path, default=None, help="Results parent (default: <project-root>/results)")
-    parser.add_argument("--ryu-manager", default="ryu-manager", help="Ryu manager executable")
-    parser.add_argument("--rest-host", default="10.0.0.4", help="REST host reachable from Mininet hosts")
-    parser.add_argument("--rest-port", type=int, default=8080)
-    parser.add_argument("--controller-wait", type=float, default=4.0)
-    parser.add_argument("--topology-timeout-extra", type=float, default=30.0)
-    args = parser.parse_args()
-    args.project_root = args.project_root.expanduser().resolve()
-    args.results_root = (args.results_root or (args.project_root / "results")).expanduser().resolve()
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    pick = ap.add_mutually_exclusive_group(required=True)
+    pick.add_argument("--config", type=Path, help="one JSON config")
+    pick.add_argument("--all", action="store_true", help="every JSON file in experiments/configs/")
+    ap.add_argument("--repeats", type=int, default=None, help="override the config's repeats")
+    ap.add_argument("--dry-run", action="store_true", help="print the plan without running anything")
+    ap.add_argument("--results-root", type=Path, default=ROOT / "results" / "experiments")
+    ap.add_argument("--ryu-manager", default="ryu-manager")
+    ap.add_argument("--rest-host", default="10.0.0.254", help="controller address seen from hosts (NAT node)")
+    ap.add_argument("--rest-port", type=int, default=8080)
+    ap.add_argument("--controller-wait", type=float, default=4.0)
+    args = ap.parse_args()
+    args.project_root = ROOT
+    args.results_root = args.results_root.expanduser().resolve()
 
-    if not args.project_root.is_dir():
-        parser.error(f"project root does not exist: {args.project_root}")
-    config_dir = args.project_root / "experiments" / "configs"
-    paths = sorted(config_dir.glob("*.json")) if args.all else [Path(args.config).expanduser().resolve()]
+    paths = sorted((ROOT / "experiments" / "configs").glob("*.json")) if args.all else [args.config.resolve()]
     if not paths:
-        parser.error(f"no JSON configuration files found in {config_dir}")
+        ap.error("no configs found in experiments/configs/")
 
-    failures = 0
+    if not args.dry_run:
+        if shutil.which(args.ryu_manager) is None:
+            ap.error(f"cannot find {args.ryu_manager!r}; activate the Ryu environment first")
+        subprocess.run(["sudo", "-v"], check=True)     # ask for the password once, up front
+
+    runs = []
     for path in paths:
         try:
             cfg = load_config(path)
-            # Current topology is D1-specific. Do not silently claim to implement
-            # congestion/loss/link-failure scenarios that topology.py does not apply.
-            if cfg.get("scenario", "none") not in ("none", "baseline", "static"):
-                raise ValueError(f"Scenario {cfg['scenario']!r} is not automated by the current topology runner. Use scenario 'none' for D1 or implement that scenario in topology.py first.")
-            if args.dry_run:
-                stamp = "DRYRUN"
-                preview_dir = args.results_root / f"{safe_name(str(cfg['name']))}_{cfg['controller_mode']}_{stamp}"
-                print(f"\n=== {path.name} ===")
-                print("Validated config:", json.dumps(cfg, indent=2))
-                print("Would write results to:", preview_dir)
-                print("No processes started; no directories created.")
-                continue
-            if run_one(path, cfg, args) != 0:
-                failures += 1
-        except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError, RuntimeError) as exc:
-            failures += 1
-            print(f"FAILED {path}: {exc}", file=sys.stderr)
-    print(f"\nFinished: {len(paths) - failures} succeeded, {failures} failed.")
-    return 1 if failures else 0
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"SKIP {path.name}: {exc}", file=sys.stderr)
+            continue
+        runs += expand(cfg, args.repeats or int(cfg["repeats"]))
+    print(f"{len(runs)} run(s) planned")
+
+    failed = 0
+    for i, run in enumerate(runs, 1):
+        print(f"[{i}/{len(runs)}]", end="")
+        if not args.dry_run:
+            subprocess.run(["sudo", "-v"], check=False)  # keep sudo alive during long sweeps
+        if not run_one(run, args):
+            failed += 1
+    print(f"\nFinished: {len(runs) - failed} succeeded, {failed} failed.")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

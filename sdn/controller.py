@@ -310,11 +310,15 @@ class BwMeter(app_manager.RyuApp):
 
         elif self.mode != 'dynamic':
             # Non-UDP traffic in static mode: ordinary learning-switch flows.
-            general_match = parser.OFPMatch(
-                in_port=in_port,
-                eth_src=eth.src,
-                eth_dst=eth.dst
-            )
+            # Match the packet type too (ARP, or the IP protocol such as ICMP).
+            # A plain MAC-pair rule would also catch later UDP packets between
+            # the same hosts, so they would never reach the controller, no
+            # per-UDP-flow rule would be installed and flowstats.csv stays empty.
+            fields = dict(in_port=in_port, eth_src=eth.src, eth_dst=eth.dst,
+                          eth_type=eth.ethertype)
+            if ip:
+                fields['ip_proto'] = ip.proto
+            general_match = parser.OFPMatch(**fields)
             self.add_flow(
                 dp, 10, general_match, actions, idle=30
             )

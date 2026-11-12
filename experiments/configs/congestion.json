@@ -1,10 +1,12 @@
-
 {
-  "name": "congestion_test",
-  "controller_mode": "dynamic",
-  "rate_mbps": 20,
+  "name": "congestion",
+  "controller_mode": ["static", "dynamic"],
+  "rate_mbps": 10,
   "packet_size": 1000,
-  "duration": 30,
+  "duration": 20,
   "scenario": "congestion",
-  "test_id": 2
+  "bg_rate_mbps": 20,
+  "bg_target_mbps": 8,
+  "test_id": 300,
+  "repeats": 3
 }
