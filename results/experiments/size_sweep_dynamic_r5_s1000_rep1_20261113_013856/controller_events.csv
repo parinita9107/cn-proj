@@ -1,0 +1,6 @@
+ts,event,flow_id,detail
+1794514148.2777956,test_start,10.0.0.1>10.0.0.2:5001,"{""event"": ""test_start"", ""test_id"": 206, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""src"": ""10.0.0.1"", ""dst"": ""10.0.0.2"", ""dst_port"": 5001, ""target_rate_mbps"": 5.0, ""payload_size"": 1000, ""duration_s"": 15.0, ""ts"": 1794514148.2629585}"
+1794514163.6773708,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 206, ""rx_pkts"": 9375, ""rx_bytes"": 9375000, ""expected_pkts"": 9375, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 14.97, ""ts"": 1794514163.637582}"
+1794514168.725169,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=9372 bytes=9762684 duration=20
+1794514168.7314737,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=9294 bytes=9681408 duration=20
+1794514168.739729,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=9362 bytes=9752264 duration=20

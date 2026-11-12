@@ -1,0 +1,12 @@
+{
+  "name": "packet_loss",
+  "controller_mode": "dynamic",
+  "rate_mbps": 10.0,
+  "packet_size": 1000,
+  "duration": 20,
+  "scenario": "packet_loss",
+  "loss_pct": 5,
+  "test_id": 401,
+  "repeats": 3,
+  "repeat": 1
+}

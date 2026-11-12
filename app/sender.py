@@ -10,6 +10,7 @@ Example:
 """
 import argparse
 import csv
+import errno
 import ipaddress
 import json
 import logging
@@ -30,7 +31,9 @@ END_GAP_S = 0.05
 MAX_SEND_ERRORS = 50   # ICMP errors arrive on every other send, so count the total
 
 CSV_FIELDS = ["time_s", "test_id", "tx_pkts", "tx_bytes", "interval_pkts",
-              "interval_bytes", "interval_mbps", "target_mbps", "dropped_pkts", "errors"]
+              "interval_bytes", "interval_mbps", "target_mbps", "dropped_pkts", "errors",
+              "blocked"]
+BLOCK_WAIT_S = 0.0005  # wait before retrying when the kernel has no buffer space (ENOBUFS)
 
 
 def parse_args(argv=None):
@@ -114,7 +117,7 @@ def main(argv=None):
     log.info("test %d: %.2f Mbit/s, %d B payload, %.1f s -> %s:%d (%d packets planned)",
              args.test_id, args.rate, args.size, args.duration, args.dst, args.port, total_planned)
 
-    tx_pkts = tx_bytes = dropped = errors = 0
+    tx_pkts = tx_bytes = dropped = errors = blocked = 0
     warned = set()
     last_pkts = last_bytes = 0
     aborted = None
@@ -135,6 +138,7 @@ def main(argv=None):
             "interval_pkts": d_pkts, "interval_bytes": d_bytes,
             "interval_mbps": round(d_bytes * 8 / window / 1e6, 4),
             "target_mbps": args.rate, "dropped_pkts": dropped, "errors": errors,
+            "blocked": blocked,
         })
         csv_file.flush()
         last_pkts, last_bytes = tx_pkts, tx_bytes
@@ -154,8 +158,23 @@ def main(argv=None):
             if args.drop_prob and rng.random() < args.drop_prob:
                 dropped += 1                    # sequence number is consumed but nothing is sent
             else:
+                data = pack_packet(TYPE_DATA, args.test_id, seq, args.size)
                 try:
-                    sock.send(pack_packet(TYPE_DATA, args.test_id, seq, args.size))
+                    while True:
+                        try:
+                            sock.send(data)
+                            break
+                        except OSError as exc:
+                            # ENOBUFS: the outgoing queue is full because the network is
+                            # slower than our rate. This is back-pressure, not a failure:
+                            # wait a moment and send the same packet again.
+                            if exc.errno != errno.ENOBUFS or interrupted["flag"]:
+                                raise
+                            blocked += 1
+                            if blocked == 1:
+                                log.warning("network is slower than %.2f Mbit/s (ENOBUFS); "
+                                            "sender is being slowed down", args.rate)
+                            time.sleep(BLOCK_WAIT_S)
                     tx_pkts += 1
                     tx_bytes += args.size
                 except ConnectionRefusedError:
@@ -197,6 +216,7 @@ def main(argv=None):
     summary = {
         "role": "sender", "test_id": args.test_id, "tx_pkts": tx_pkts, "tx_bytes": tx_bytes,
         "seq_used": seq, "deliberately_dropped": dropped, "send_errors": errors,
+        "blocked": blocked,
         "duration_s": round(elapsed, 3),
         "achieved_mbps": round(tx_bytes * 8 / elapsed / 1e6, 4),
         "target_mbps": args.rate, "interrupted": interrupted["flag"], "aborted": aborted,
@@ -205,7 +225,10 @@ def main(argv=None):
         log.error(aborted)
     log.info("done: sent %d packets (%d bytes) in %.2f s = %.3f Mbit/s (target %.3f)",
              tx_pkts, tx_bytes, elapsed, summary["achieved_mbps"], args.rate)
-    if summary["achieved_mbps"] < 0.95 * args.rate and not interrupted["flag"] and not aborted:
+    if blocked and summary["achieved_mbps"] < 0.95 * args.rate:
+        log.warning("achieved rate is below the target because the network could not carry it "
+                    "(%d ENOBUFS back-pressure waits)", blocked)
+    elif summary["achieved_mbps"] < 0.95 * args.rate and not interrupted["flag"] and not aborted:
         log.warning("achieved rate is more than 5%% below the target; Python cannot keep up "
                     "at this rate/size, use a larger --size or a lower --rate")
     print("SUMMARY " + json.dumps(summary))

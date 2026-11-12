@@ -1,0 +1,11 @@
+{
+  "name": "smoke_test",
+  "controller_mode": "static",
+  "rate_mbps": 5.0,
+  "packet_size": 1000,
+  "duration": 10,
+  "scenario": "none",
+  "test_id": 1,
+  "repeats": 1,
+  "repeat": 1
+}

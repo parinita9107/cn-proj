@@ -1,0 +1,9 @@
+ts,event,flow_id,detail
+1794513896.5113933,test_start,10.0.0.1>10.0.0.2:5001,"{""event"": ""test_start"", ""test_id"": 501, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""src"": ""10.0.0.1"", ""dst"": ""10.0.0.2"", ""dst_port"": 5001, ""target_rate_mbps"": 5.0, ""payload_size"": 1000, ""duration_s"": 20.0, ""ts"": 1794513896.4998891}"
+1794513900.5076785,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=10.080 Mbps target=5.210 Mbps meter=1
+1794513900.5103128,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=10.060 Mbps target=5.210 Mbps meter=1
+1794513900.5115821,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=10.042 Mbps target=5.210 Mbps meter=1
+1794513916.8950043,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 501, ""rx_pkts"": 15625, ""rx_bytes"": 15625000, ""expected_pkts"": 25000, ""lost_pkts"": 9375, ""loss_pct"": 37.5, ""duration_s"": 19.829, ""ts"": 1794513916.8684065}"
+1794513921.928416,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=24985 bytes=26031430 duration=25
+1794513921.9471745,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=15290 bytes=15929240 duration=25
+1794513921.9510233,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=15534 bytes=16183488 duration=25

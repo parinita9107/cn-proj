@@ -1,0 +1,11 @@
+{
+  "name": "load_sweep",
+  "controller_mode": "static",
+  "rate_mbps": 5.0,
+  "packet_size": 1000,
+  "duration": 15,
+  "scenario": "none",
+  "test_id": 101,
+  "repeats": 3,
+  "repeat": 1
+}

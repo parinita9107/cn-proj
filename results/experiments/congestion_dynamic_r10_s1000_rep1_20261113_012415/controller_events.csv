@@ -1,0 +1,14 @@
+ts,event,flow_id,detail
+1794513266.5997558,test_start,10.0.0.3>10.0.0.2:5002,"{""event"": ""test_start"", ""test_id"": 5301, ""src_ip"": ""10.0.0.3"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5002, ""src"": ""10.0.0.3"", ""dst"": ""10.0.0.2"", ""dst_port"": 5002, ""target_rate_mbps"": 8.0, ""payload_size"": 1000, ""duration_s"": 24.0, ""ts"": 1794513266.591819}"
+1794513268.7087722,test_start,10.0.0.1>10.0.0.2:5001,"{""event"": ""test_start"", ""test_id"": 301, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""src"": ""10.0.0.1"", ""dst"": ""10.0.0.2"", ""dst_port"": 5001, ""target_rate_mbps"": 10.0, ""payload_size"": 1000, ""duration_s"": 20.0, ""ts"": 1794513268.6962013}"
+1794513270.00882,rate_limit_on,10.0.0.3>10.0.0.2:5002,measured=11.516 Mbps target=8.336 Mbps meter=1
+1794513270.0156386,rate_limit_on,10.0.0.3>10.0.0.2:5002,measured=11.435 Mbps target=8.336 Mbps meter=1
+1794513270.0162761,rate_limit_on,10.0.0.3>10.0.0.2:5002,measured=12.104 Mbps target=8.336 Mbps meter=1
+1794513289.1186752,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 301, ""rx_pkts"": 25000, ""rx_bytes"": 25000000, ""expected_pkts"": 25000, ""lost_pkts"": 0, ""loss_pct"": 0.0, ""duration_s"": 19.847, ""ts"": 1794513289.0687094}"
+1794513290.9760308,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 5301, ""rx_pkts"": 27337, ""rx_bytes"": 27337000, ""expected_pkts"": 60000, ""lost_pkts"": 32663, ""loss_pct"": 54.4383, ""duration_s"": 23.956, ""ts"": 1794513290.9548166}"
+1794513294.2331157,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=1 pkts=59993 bytes=62509766 duration=27
+1794513294.2334316,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=24982 bytes=26028304 duration=25
+1794513294.2448478,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=3 pkts=27106 bytes=28242492 duration=27
+1794513294.247019,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=25000 bytes=26047060 duration=25
+1794513294.2790425,flow_removed,10.0.0.3>10.0.0.2:5002,dpid=2 pkts=27298 bytes=28442556 duration=27
+1794513294.2826288,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=25002 bytes=26049144 duration=25

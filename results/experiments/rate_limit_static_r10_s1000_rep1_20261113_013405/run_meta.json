@@ -1,0 +1,12 @@
+{
+  "name": "rate_limit",
+  "controller_mode": "static",
+  "rate_mbps": 10.0,
+  "target_rate_mbps": 5,
+  "packet_size": 1000,
+  "duration": 20,
+  "scenario": "none",
+  "test_id": 500,
+  "repeats": 3,
+  "repeat": 1
+}

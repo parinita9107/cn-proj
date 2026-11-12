@@ -1,0 +1,13 @@
+{
+  "name": "congestion",
+  "controller_mode": "static",
+  "rate_mbps": 10.0,
+  "packet_size": 1000,
+  "duration": 20,
+  "scenario": "congestion",
+  "bg_rate_mbps": 20,
+  "bg_target_mbps": 8,
+  "test_id": 300,
+  "repeats": 3,
+  "repeat": 1
+}

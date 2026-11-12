@@ -24,6 +24,8 @@ UDP_PRIO = 20     # per-flow measurement rules (counted and logged)
 L2_PRIO = 10      # generic L2 rules
 POLL_S = 1        # flow stats poll interval
 UDP_IDLE_S = 10   # UDP flow expires 10 s after traffic stops
+FRAME_OVERHEAD = 42  # UDP 8 + IPv4 20 + Ethernet 14 bytes per packet
+OVER_LIMIT_POLLS = 3  # polls in a row above target before limiting (ignores one-off spikes)
 
 FLOW_HDR = ['ts', 'dpid', 'flow_id', 'pkts', 'bytes', 'duration_s',
             'delta_pkts', 'delta_bytes', 'rate_mbps']
@@ -63,6 +65,8 @@ class BwMeter(app_manager.RyuApp):
         self.next_meter_ids = {}
         self.rate_limited = {}
         self.low_rate_polls = {}
+        self.recent_installs = {}   # (dpid, flow_id, in_port) -> time a UDP rule was sent
+        self.high_rate_polls = {}
         kwargs['wsgi'].register(TestApi, {'app': self})
         self.monitor_thread = hub.spawn(self._monitor)
         self.logger.info('Controller started, mode=%s, out=%s',
@@ -93,15 +97,41 @@ class BwMeter(app_manager.RyuApp):
                 return True
         return False
     def _target_rate_kbps(self, src, dst, dst_port):
+        """Declared target as an on-the-wire rate in kbit/s.
+
+        The application declares its rate in UDP payload bytes, but switch
+        counters and OpenFlow meters count whole Ethernet frames (payload + 42
+        bytes of UDP/IP/Ethernet headers). Convert, so a flow that sends exactly
+        what it declared is never limited (at 200 B payload the headers alone
+        add 21 %).
+        """
         for body in reversed(list(self.tests.values())):
             if (body.get('src') == src and
                 body.get('dst') == dst and
                 int(body.get('dst_port', -1)) == int(dst_port)):
                 rate = float(body.get('target_rate_mbps', 0))
+                size = float(body.get('payload_size', 0) or 0)
                 if rate > 0:
+                    if size > 0:
+                        rate *= (size + FRAME_OVERHEAD) / size
                     return max(1, int(rate * 1000))
 
         return int(os.environ.get('METER_RATE_KBPS', '5000'))
+
+    def _recently_installed(self, dpid, fid, in_port):
+        """True if we already sent this UDP rule less than a second ago.
+
+        Packets that reached the controller before the rule existed are still
+        queued as packet-ins. Re-sending the same FlowMod for each of them keeps
+        the controller busy (delaying flow-stats replies) and resets the rule's
+        duration, so forward those packets without re-installing.
+        """
+        key = (dpid, fid, in_port)
+        now = time.time()
+        if now - self.recent_installs.get(key, 0) < 1.0:
+            return True
+        self.recent_installs[key] = now
+        return False
 
     def add_flow(self, dp, priority, match, actions, idle=0, flags=0):
         ofp, parser = dp.ofproto, dp.ofproto_parser
@@ -263,14 +293,15 @@ class BwMeter(app_manager.RyuApp):
                     )
                 ]
 
-                dp.send_msg(parser.OFPFlowMod(
-                    datapath=dp,
-                    priority=UDP_PRIO,
-                    match=match,
-                    instructions=instructions,
-                    idle_timeout=UDP_IDLE_S,
-                    flags=ofp.OFPFF_SEND_FLOW_REM
-                ))
+                if not self._recently_installed(dp.id, fid, in_port):
+                    dp.send_msg(parser.OFPFlowMod(
+                        datapath=dp,
+                        priority=UDP_PRIO,
+                        match=match,
+                        instructions=instructions,
+                        idle_timeout=UDP_IDLE_S,
+                        flags=ofp.OFPFF_SEND_FLOW_REM
+                    ))
 
                 self.logger.info(
                     "METERED UDP FLOW dpid=%s %s:%s -> %s:%s",
@@ -303,10 +334,12 @@ class BwMeter(app_manager.RyuApp):
                 ipv4_dst=ip.dst,
                 udp_dst=u.dst_port
             )
-            self.add_flow(
-                dp, UDP_PRIO, udp_match, actions,
-                idle=UDP_IDLE_S, flags=ofp.OFPFF_SEND_FLOW_REM
-            )
+            if not self._recently_installed(
+                    dp.id, self._fid(ip.src, ip.dst, u.dst_port), 0):
+                self.add_flow(
+                    dp, UDP_PRIO, udp_match, actions,
+                    idle=UDP_IDLE_S, flags=ofp.OFPFF_SEND_FLOW_REM
+                )
 
         elif self.mode != 'dynamic':
             # Non-UDP traffic in static mode: ordinary learning-switch flows.
@@ -365,9 +398,19 @@ class BwMeter(app_manager.RyuApp):
 
             dpk = st.packet_count - p0
             dby = st.byte_count - b0
-            dt = (now - t0) if t0 else POLL_S
 
-            rate = dby * 8 / dt / 1e6 if dt > 0 else 0.0
+            if t0 is None:
+                # First sample of this rule: no interval to measure over yet.
+                rate = 0.0
+            else:
+                dt = now - t0
+                if dt < 0.5 * POLL_S:
+                    # Several replies arrived together (the controller was busy,
+                    # e.g. with a burst of packet-ins). Dividing by this tiny gap
+                    # gives absurd rates (thousands of Mbit/s), so skip this one;
+                    # the next normal reply covers the whole interval.
+                    continue
+                rate = dby * 8 / dt / 1e6
 
             self.prev[key] = (st.packet_count, st.byte_count, now)
 
@@ -377,7 +420,7 @@ class BwMeter(app_manager.RyuApp):
                  st.duration_sec, dpk, dby, round(rate, 3)]
             )
 
-            if not self._is_registered_test_flow(src, dst, port):
+            if t0 is None or not self._is_registered_test_flow(src, dst, port):
                 continue
 
             target = self._target_rate_kbps(src, dst, port) / 1000.0
@@ -388,7 +431,15 @@ class BwMeter(app_manager.RyuApp):
 
             is_limited = self.rate_limited.get(key, False)
 
+            # Count consecutive polls over target. One poll can read high just
+            # because two stats replies arrived close together (short dt).
             if rate > target * 1.20 and not is_limited:
+                self.high_rate_polls[key] = self.high_rate_polls.get(key, 0) + 1
+            else:
+                self.high_rate_polls[key] = 0
+
+            if self.high_rate_polls[key] >= OVER_LIMIT_POLLS and not is_limited:
+                self.high_rate_polls[key] = 0
                 self.modify_meter(dp, meter_id, int(target * 1000))
                 self.rate_limited[key] = True
                 self.low_rate_polls[key] = 0
