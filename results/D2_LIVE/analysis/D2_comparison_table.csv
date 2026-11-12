@@ -1,2 +1,0 @@
-Experiment,Sender target Mbps,Meter limit Mbps,Mean sender Mbps,Mean receiver Mbps,Packets sent,Packets received,Packets lost,Packet loss percent,Application bytes sent,Application bytes received
-D2 Dynamic,10,5,10.0004,5.1549,25000,13527,11473,45.892,25000000,13527000

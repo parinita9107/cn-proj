@@ -1,2 +1,10 @@
-timestamp,event,test_id,target_rate_mbps,data
-1793810163.6235287,rate_limit_on,D2,5.0,"{""switch"": 1, ""meter_id"": 1, ""trigger_mbps"": 6.0, ""limit_mbps"": 5.0, ""flow"": ""10.0.0.1 -> 10.0.0.2 UDP/5001""}"
+ts,event,flow_id,detail
+1794505810.7976046,ping,?>?:?,"{""event"": ""ping"", ""test_id"": 0}"
+1794505891.7936473,test_start,10.0.0.1>10.0.0.2:5001,"{""event"": ""test_start"", ""test_id"": 50, ""src_ip"": ""10.0.0.1"", ""dst_ip"": ""10.0.0.2"", ""udp_port"": 5001, ""src"": ""10.0.0.1"", ""dst"": ""10.0.0.2"", ""dst_port"": 5001, ""target_rate_mbps"": 5.0, ""payload_size"": 1000, ""duration_s"": 15.0, ""ts"": 1794505891.785244}"
+1794505893.1965961,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=10.440 Mbps target=5.000 Mbps meter=1
+1794505893.1969986,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=10.433 Mbps target=5.000 Mbps meter=1
+1794505893.1972604,rate_limit_on,10.0.0.1>10.0.0.2:5001,measured=10.432 Mbps target=5.000 Mbps meter=1
+1794505907.1743033,test_end,?>?:?,"{""event"": ""test_end"", ""test_id"": 50, ""rx_pkts"": 10507, ""rx_bytes"": 10507000, ""expected_pkts"": 18750, ""lost_pkts"": 8243, ""loss_pct"": 43.9627, ""duration_s"": 14.976, ""ts"": 1794505907.151992}"
+1794505917.2131467,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=2 pkts=10487 bytes=10924514 duration=25
+1794505917.2132683,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=3 pkts=10365 bytes=10797390 duration=25
+1794505917.2133288,flow_removed,10.0.0.1>10.0.0.2:5001,dpid=1 pkts=18743 bytes=19527266 duration=25
