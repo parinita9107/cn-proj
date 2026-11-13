@@ -21,6 +21,11 @@ from ryu.app.wsgi import ControllerBase, WSGIApplication, route
 from webob import Response
 
 UDP_PRIO = 20     # per-flow measurement rules (counted and logged)
+BLOCK_PRIO = 30   # drop rules for unauthorized flows (above everything else)
+BLOCK_IDLE_S = 15  # a drop rule expires 15 s after the blocked traffic stops
+# UDP ports reserved for registered measurement tests. In dynamic mode a flow to
+# one of these ports is only allowed after its sender has sent test_start.
+PROTECTED_PORTS = {int(p) for p in os.environ.get('PROTECTED_PORTS', '5001,5002').split(',') if p.strip()}
 L2_PRIO = 10      # generic L2 rules
 POLL_S = 1        # flow stats poll interval
 UDP_IDLE_S = 10   # UDP flow expires 10 s after traffic stops
@@ -65,6 +70,7 @@ class BwMeter(app_manager.RyuApp):
         self.next_meter_ids = {}
         self.rate_limited = {}
         self.low_rate_polls = {}
+        self.blocked = {}           # (dpid, flow_id) -> OFPMatch of the drop rule
         self.recent_installs = {}   # (dpid, flow_id, in_port) -> time a UDP rule was sent
         self.high_rate_polls = {}
         kwargs['wsgi'].register(TestApi, {'app': self})
@@ -182,7 +188,49 @@ class BwMeter(app_manager.RyuApp):
         dp.send_msg(request)
 
     # ---------- REST callback ----------
+    # ---------- blocking unauthorized flows ----------
+    def _block_flow(self, dp, src, dst, dst_port):
+        """Install a drop rule for a UDP flow that never registered (test_start)."""
+        fid = self._fid(src, dst, dst_port)
+        if self._recently_installed(dp.id, fid, 'block'):
+            return
+        parser, ofp = dp.ofproto_parser, dp.ofproto
+        match = parser.OFPMatch(eth_type=0x0800, ip_proto=17, ipv4_src=src,
+                                ipv4_dst=dst, udp_dst=int(dst_port))
+        # An empty instruction list means "drop".
+        dp.send_msg(parser.OFPFlowMod(datapath=dp, priority=BLOCK_PRIO, match=match,
+                                      instructions=[], idle_timeout=BLOCK_IDLE_S,
+                                      flags=ofp.OFPFF_SEND_FLOW_REM))
+        first = (dp.id, fid) not in self.blocked
+        self.blocked[(dp.id, fid)] = match
+        if first:
+            self._event('blocked', fid,
+                        'dpid=%s reason=no test_start for protected UDP port %s'
+                        % (dp.id, dst_port))
+            self.logger.info('BLOCKED unregistered flow %s on dpid=%s', fid, dp.id)
+
+    def _unblock_flow(self, fid):
+        """Remove drop rules for a flow once it registers with test_start."""
+        for (dpid, f), match in list(self.blocked.items()):
+            if f != fid:
+                continue
+            dp = self.datapaths.get(dpid)
+            if dp is not None:
+                ofp, parser = dp.ofproto, dp.ofproto_parser
+                dp.send_msg(parser.OFPFlowMod(datapath=dp, command=ofp.OFPFC_DELETE_STRICT,
+                                              priority=BLOCK_PRIO, match=match,
+                                              out_port=ofp.OFPP_ANY, out_group=ofp.OFPG_ANY))
+            del self.blocked[(dpid, f)]
+            self.recent_installs.pop((dpid, fid, 'block'), None)
+            self._event('unblocked', fid, 'dpid=%s reason=test_start received' % dpid)
+
     def on_test_event(self, body):
+        # Normalize application field names to the controller's internal names.
+        body = dict(body)
+        body['src'] = body.get('src', body.get('src_ip', '?'))
+        body['dst'] = body.get('dst', body.get('dst_ip', '?'))
+        body['dst_port'] = body.get('dst_port', body.get('udp_port', '?'))
+
         ev = body.get('event', 'unknown')
         tid = body.get('test_id')
         if ev == 'test_start':
@@ -191,6 +239,8 @@ class BwMeter(app_manager.RyuApp):
                         body.get('dst_port', '?'))
         self._event(ev, fid, json.dumps(body))
         self.logger.info('REST %s: %s', ev, body)
+        if ev == 'test_start':
+            self._unblock_flow(fid)
 
     # ---------- switch setup ----------
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
@@ -227,6 +277,19 @@ class BwMeter(app_manager.RyuApp):
         self.mac_to_port.setdefault(dpid, {})
         self.mac_to_port[dpid][eth.src] = in_port
 
+        ip = pkt.get_protocol(ipv4.ipv4)
+        u = pkt.get_protocol(udp.udp)
+
+        # Checked before forwarding (even before flooding), so no packet of an
+        # unauthorized flow gets through.
+        # Dynamic mode: traffic to a protected measurement port from a sender
+        # that never registered (no test_start) is unauthorized. Drop it here
+        # and install a drop rule so the switch discards the rest itself.
+        if (ip and u and self.mode == 'dynamic' and u.dst_port in PROTECTED_PORTS
+                and not self._is_registered_test_flow(ip.src, ip.dst, u.dst_port)):
+            self._block_flow(dp, ip.src, ip.dst, u.dst_port)
+            return
+
         out_port = self.mac_to_port[dpid].get(
             eth.dst, ofp.OFPP_FLOOD
         )
@@ -243,8 +306,6 @@ class BwMeter(app_manager.RyuApp):
             ))
             return
 
-        ip = pkt.get_protocol(ipv4.ipv4)
-        u = pkt.get_protocol(udp.udp)
 
         # Dynamic mode: install a metered rule for UDP traffic.
         if ip and u and self.mode == 'dynamic':
@@ -482,6 +543,16 @@ class BwMeter(app_manager.RyuApp):
     @set_ev_cls(ofp_event.EventOFPFlowRemoved, MAIN_DISPATCHER)
     def _flow_removed(self, ev):
         msg = ev.msg
+        if msg.priority == BLOCK_PRIO:
+            m = msg.match
+            fid = self._fid(m['ipv4_src'], m['ipv4_dst'], m['udp_dst'])
+            self._event('block_removed', fid,
+                        'dpid=%s dropped_pkts=%s dropped_bytes=%s duration=%s' % (
+                            msg.datapath.id, msg.packet_count,
+                            msg.byte_count, msg.duration_sec))
+            self.blocked.pop((msg.datapath.id, fid), None)
+            self.recent_installs.pop((msg.datapath.id, fid, 'block'), None)
+            return
         if msg.priority != UDP_PRIO:
             return
         m = msg.match
