@@ -72,6 +72,13 @@ dynamic mode.
 | `static` (baseline) | Learning switch. One priority-20 rule per UDP flow (src, dst, UDP dst port); priority-10 rules per MAC pair and packet type for other traffic | None |
 | `dynamic` | Every UDP flow rule points to a meter, which starts at 1 Gbps (no limit) | Declared target converted to frame bytes: target × (payload + 42) / payload. If the measured rate is above 1.2 × that for 3 polls in a row: meter set to it (`rate_limit_on`). After 5 polls below 0.5 × target: limit removed (`rate_limit_off`) |
 
+**Blocking (dynamic mode only).** UDP ports 5001 and 5002 are reserved for
+registered tests (`PROTECTED_PORTS`). A packet to one of them whose flow (src, dst,
+port) has no `test_start` is dropped, and a priority-30 drop rule is installed
+(`blocked` event). The rule expires 15 s after the traffic stops (`block_removed`,
+with the number of packets dropped). If that sender later sends `test_start`, the
+drop rule is deleted at once (`unblocked`).
+
 Mode is set with the `CONTROLLER_MODE` environment variable. Logs go to `RESULTS_DIR`.
 
 ## 5. Log files (CSV)
@@ -101,4 +108,5 @@ Byte counts are UDP payload bytes. `jitter_ms` is the RFC 3550 smoothed jitter.
 `ts, event, flow_id, detail`
 
 Events: `test_start`, `test_end`, `rate_limit_on`, `rate_limit_off`,
-`flow_removed` (with the rule's final packet and byte counts).
+`flow_removed` (with the rule's final packet and byte counts), `blocked`,
+`unblocked`, `block_removed` (with the number of packets dropped).

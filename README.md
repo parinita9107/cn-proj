@@ -32,6 +32,10 @@ OpenFlow meters. A static controller mode is the baseline.
   frame bytes) by more than 20 % for 3 polls in a row, the controller sets the
   meter to the target rate (`rate_limit_on`). After 5
   polls below 50 % of the target, it lifts the limit (`rate_limit_off`).
+* **Blocking unauthorized flows:** in `dynamic` mode the measurement ports (5001,
+  5002) are reserved for registered tests. A sender that never sent `test_start`
+  is blocked with a drop rule (`blocked`). The block is lifted as soon as it
+  registers (`unblocked`).
 
 ## Folder map
 
@@ -114,6 +118,13 @@ Each run writes to `results/experiments/<name>_<mode>_r<rate>_s<size>_rep<n>_<ti
 | `congestion.json` | h3 sends 20 Mbps (declares 8) while h1 sends 10 Mbps |
 | `packet_loss.json` | 5 % netem loss on the s2 to s3 link |
 
+Unauthorized-access scenario (manual): in dynamic mode, run a sender with
+`--no-ctrl` from h4 to h2:5001. The receiver gets nothing, `controller_events.csv`
+shows `blocked`, and `dump-flows s1` shows a priority-30 drop rule counting the
+dropped packets. Running the same sender with `--ctrl-url` sends `test_start`,
+the controller logs `unblocked`, and the traffic goes through. See
+`results/blocking_demo/`.
+
 ## Application options
 
 ```
@@ -148,6 +159,8 @@ Packet format, REST messages and CSV formats: [docs/INTERFACES.md](docs/INTERFAC
 
 ## Limitations
 
+* No backup path: the controller does not reroute around a failed link
+  (future work).
 * Python pacing becomes inaccurate at high packet rates (small packets at high
   Mbps). The sender warns when the achieved rate is more than 5 % below the target.
 * When the offered load exceeds the 20 Mbps core link, Linux pushes back on the
